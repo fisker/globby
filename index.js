@@ -72,8 +72,8 @@ const createFilterFunction = isIgnored => {
 const unionFastGlobResults = (results, filter) => results.flat().filter(fastGlobResult => filter(fastGlobResult));
 const unionFastGlobStreams = (streams, filter) => merge2(streams).pipe(new FilterStream(fastGlobResult => filter(fastGlobResult)));
 
-const convertNegativePatterns = (patterns, taskOptions) => {
-	const globTasks = [];
+const convertNegativePatternsToIgnore = patterns => {
+	const tasks = [];
 	for (const [index, pattern] of patterns.entries()) {
 		if (isNegative(pattern)) {
 			continue;
@@ -84,15 +84,10 @@ const convertNegativePatterns = (patterns, taskOptions) => {
 			.filter(pattern => isNegative(pattern))
 			.map(pattern => pattern.slice(1));
 
-		const options = {
-			...taskOptions,
-			ignore: [...taskOptions.ignore, ...ignore],
-		};
-
-		globTasks.push({patterns: [pattern], options});
+		tasks.push({patterns: [pattern], ignore});
 	}
 
-	return globTasks;
+	return tasks;
 };
 
 const getDirGlobOptions = (options, cwd) => ({
@@ -100,52 +95,55 @@ const getDirGlobOptions = (options, cwd) => ({
 	...(Array.isArray(options) ? {files: options} : options),
 });
 
+const createTaskOptions = (options, ignore) => ({...options, ignore: [...options.ignore, ...ignore]});
 const generateTasks = async (patterns, options) => {
-	const globTasks = convertNegativePatterns(patterns, options);
-
+	const tasks = convertNegativePatternsToIgnore(patterns);
 	const {cwd, expandDirectories} = options;
 
 	if (!expandDirectories) {
-		return globTasks;
+		return tasks.map(({patterns, ignore}) => ({patterns, options: createTaskOptions(options, ignore)}));
 	}
 
-	const patternExpandOptions = getDirGlobOptions(expandDirectories, cwd);
 	const ignoreExpandOptions = cwd ? {cwd} : undefined;
+	const patternExpandOptions = getDirGlobOptions(expandDirectories, cwd);
 
+	options.ignore = await dirGlob(options.ignore, ignoreExpandOptions);
 	return Promise.all(
-		globTasks.map(async task => {
-			let {patterns, options} = task;
+		tasks.map(async task => {
+			let {patterns, ignore} = task;
 
 			[
 				patterns,
-				options.ignore,
+				ignore,
 			] = await Promise.all([
 				dirGlob(patterns, patternExpandOptions),
-				dirGlob(options.ignore, ignoreExpandOptions),
+				dirGlob(ignore, ignoreExpandOptions),
 			]);
 
-			return {patterns, options};
+			return {patterns, options: createTaskOptions(options, ignore)};
 		}),
 	);
 };
 
 const generateTasksSync = (patterns, options) => {
-	const globTasks = convertNegativePatterns(patterns, options);
-
+	const tasks = convertNegativePatternsToIgnore(patterns);
 	const {cwd, expandDirectories} = options;
 
 	if (!expandDirectories) {
-		return globTasks;
+		return tasks.map(({patterns, ignore}) => ({patterns, options: createTaskOptions(options, ignore)}));
 	}
 
-	const patternExpandOptions = getDirGlobOptions(expandDirectories, cwd);
 	const ignoreExpandOptions = cwd ? {cwd} : undefined;
+	const patternExpandOptions = getDirGlobOptions(expandDirectories, cwd);
 
-	return globTasks.map(task => {
-		let {patterns, options} = task;
+	options.ignore = dirGlob.sync(options.ignore, ignoreExpandOptions);
+
+	return tasks.map(task => {
+		let {patterns, ignore} = task;
 		patterns = dirGlob.sync(patterns, patternExpandOptions);
-		options.ignore = dirGlob.sync(options.ignore, ignoreExpandOptions);
-		return {patterns, options};
+		ignore = dirGlob.sync(ignore, ignoreExpandOptions);
+
+		return {patterns, options: createTaskOptions(options, ignore)};
 	});
 };
 

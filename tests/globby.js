@@ -118,7 +118,7 @@ test.serial('cwd option - sync', async t => {
 	process.chdir(cwd);
 });
 
-test('don\'t mutate the options object - async', async t => {
+test('don\'t mutate the options object', async t => {
 	await runGlobby(t, ['*.tmp', '!b.tmp'], Object.freeze({ignore: Object.freeze([])}));
 	t.pass();
 });
