@@ -5,7 +5,7 @@ import dirGlob from 'dir-glob';
 import {isGitIgnored, isGitIgnoredSync} from './gitignore.js';
 import {FilterStream, toPath} from './utilities.js';
 
-const isNegative = pattern => pattern[0] === '!';
+const isNegative = pattern => pattern[0] === '!' && pattern[1] !== '(';
 
 const assertPatternsInput = patterns => {
 	if (!patterns.every(pattern => typeof pattern === 'string')) {

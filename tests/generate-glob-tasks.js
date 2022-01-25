@@ -220,3 +220,15 @@ test('random patterns', async t => {
 		);
 	}
 });
+
+test('negative patterns', async (t) => {
+	t.deepEqual(
+		await getTasks(t, ['foo', '!(bar)']),
+		[
+			{
+				patterns: ['foo', '!(bar)'],
+				ignore: []
+			}
+		],
+	);
+});
